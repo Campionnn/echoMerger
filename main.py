@@ -1,40 +1,82 @@
-from pynput import mouse
-from pynput.keyboard import Key, Listener
-import win32gui
+import threading
+import keyboard
+import os
+from merger import Merger
+from scanner import Scanner
+from reader import Reader
 
 
-window_name = "Wuthering Waves  "
+def kill():
+    keyboard.wait('esc')
+    print("esc key detected... quitting")
+    os._exit(0)
 
 
 def main():
-    window_rect = win32gui.GetWindowRect(win32gui.FindWindow(None, window_name))
-    # print width and height
-    width = window_rect[2] - window_rect[0]
-    height = window_rect[3] - window_rect[1]
-    print(width, height)
+    merger = Merger()
+    scanner = Scanner(merger.window_handle, merger.window_rect)
+    reader = Reader(merger.window_handle, merger.window_rect)
 
-    mouse_controller = mouse.Controller()
+    threading.Thread(target=kill).start()
 
-    # click in middle of window
-    # mouse_controller.position = (window_rect[0] + width // 2, window_rect[1] + height // 2)
-    # mouse_controller.click(mouse.Button.left, 1)
+    # print(scanner.find_echos_order(scanner.screenshot("buh")))
 
-    # click bottom right of window
-    mouse_controller.position = (window_rect[2], window_rect[3])
-    mouse_controller.click(mouse.Button.left, 1)
+    merger.set_window_foreground()
+    merger.wake_up()
+    while True:
+        merger.merge()
+        order = scanner.find_echos_order(scanner.screenshot())
+        merger.wake_up()
+        print(order)
+        if len(order) == 0:
+            raise ValueError(f"Invalid order: {order}")
+        for i in order:
+            if i == "gold":
+                merger.select()
+                im = reader.screenshot()
+                merger.wake_up()
+                echo_cost = reader.find_cost(im)
+                echo_main = reader.find_main(im, echo_cost)
+                echo_set = reader.find_set(im)
+                print(f"Found: {echo_set} : {echo_main} : {echo_cost}")
+                if echo_cost not in [1, 3]:
+                    raise ValueError(f"Invalid cost: {echo_cost}")
+                if echo_main is None:
+                    raise ValueError(f"Invalid main: {echo_main}")
+                if echo_set is None:
+                    raise ValueError(f"Invalid set: {echo_set}")
+                if lock_echo(echo_cost, echo_main, echo_set):
+                    print(f"Locked: {echo_set} : {echo_main} : {echo_cost}")
+                    merger.lock()
+                merger.back()
+                merger.next()
+            else:
+                merger.next()
+        merger.back()
 
-# def callback(hwnd, extra):
-#     rect = win32gui.GetWindowRect(hwnd)
-#     x = rect[0]
-#     y = rect[1]
-#     w = rect[2] - x
-#     h = rect[3] - y
-#     print("Window %s:" % win32gui.GetWindowText(hwnd))
-#     print("\tLocation: (%d, %d)" % (x, y))
-#     print("\t    Size: (%d, %d)" % (w, h))
-#
-# def main():
-#     win32gui.EnumWindows(callback, None)
+
+def lock_echo(echo_cost, echo_main, echo_set):
+    if echo_cost == 1 and echo_main == "ATK":
+        return True
+    if echo_cost == 1 and echo_set == "Rejuvenating Glow" and echo_main == "HP":
+        return True
+    if echo_main == "Energy Regen":
+        return True
+    if echo_cost == 3 and echo_set in ["Moonlit Clouds", "Lingering Tunes"] and (echo_main not in ["HP", "ATK", "DEF"]):
+        return True
+    if echo_set == "Freezing Frost" and echo_main == "Glacio DMG Bonus":
+        return True
+    if echo_set == "Molten Rift" and echo_main == "Fusion DMG Bonus":
+        return True
+    if echo_set == "Void Thunder" and echo_main == "Electro DMG Bonus":
+        return True
+    if echo_set == "Sierra Gale" and echo_main == "Aero DMG Bonus":
+        return True
+    if echo_set == "Celestial Light" and echo_main == "Spectro DMG Bonus":
+        return True
+    if echo_set == "Sun-sinking Eclipses" and echo_main == "Havoc DMG Bonus":
+        return True
+    return False
 
 
 if __name__ == "__main__":
